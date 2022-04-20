@@ -15,11 +15,17 @@ import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
 
+import services.Controller;
 import util.Acuerdo;
 import util.Estado;
 
 public class Proceso implements Runnable {
 
+	// Flags
+	
+	boolean flagCoordinador;
+	Object espera = new Object();
+	
 	// Variables
 	
 	int id;
@@ -28,7 +34,7 @@ public class Proceso implements Runnable {
 	// Estados
 	
 	Acuerdo estadoAcuerdo;
-	Estado estadoProceso = Estado.INACTIVO;
+	Estado estadoProceso = Estado.ACTIVO;
 	
 	// Generación de numeros aleatorios
 	
@@ -36,6 +42,7 @@ public class Proceso implements Runnable {
 	
 	public Proceso(int idIn) {
 		this.id = idIn;
+		this.eleccion();
 	}
 	
 	@Override
@@ -55,23 +62,64 @@ public class Proceso implements Runnable {
 			
 			// Computar Valor
 			
-			
-			
-			
-			
+			int valor = computarValor();
+			if(valor < 0) {
+				eleccion();
+			}
 			
 		}
 		
 	}
 	
+	public int computarValor() {
+		return 1;
+	}
 	
-	public void eleccion(int id) {
-		for(int i = id; i < 6; i++) {
-			if(coordinadorActivo("http://localhost:8080/loquequieras"+i)) {
-				
+	public void eleccion() {
+		boolean flagFinEleccion = false;
+		while(!flagFinEleccion) {
+			boolean flagSuccess = false;
+			for(int i = id+1; i <= 6; i++) {
+				if(coordinadorActivo("http://localhost:8080/loquequieras"+i)) {
+					flagSuccess = true;
+					break;
+				}
+			}
+			if(flagSuccess) {
+				flagCoordinador = false;
+				try {
+					synchronized(espera) {
+						espera.wait(1000);
+					}
+					
+					if(flagCoordinador) {
+						flagFinEleccion = true;
+					}
+				} catch(Exception ex) {
+					
+				}
+			} else {
+				this.coordinador = id;
+				notificarCoordinador();
+				flagFinEleccion = true;
 			}
 		}
 	} 
+	
+	public void notifyResponse(int idIn) {
+		flagCoordinador = true;
+		coordinador = idIn;
+		synchronized(espera) {
+			espera.notifyAll();
+		}
+	}
+	
+	public void notificarCoordinador() {
+		for(int i = 0; i < Controller.instance.getNumProc(); i++) {
+			// Request a la url de notificación
+			request("");
+		}
+	}
 	
 	public String request(String urlIn) {
 		try {
