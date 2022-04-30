@@ -33,7 +33,7 @@ public class Proceso implements Runnable {
 	
 	// Estados
 	
-	Acuerdo estadoAcuerdo;
+	Acuerdo estadoAcuerdo = Acuerdo.ACUERDO;
 	Estado estadoProceso = Estado.ACTIVO;
 	
 	// Generación de numeros aleatorios
@@ -43,6 +43,12 @@ public class Proceso implements Runnable {
 	public Proceso(int idIn) {
 		this.id = idIn;
 		this.eleccion();
+		
+		System.out.println("["+id+"] Started.");
+	}
+	
+	public void escribirAConsola(String msg) {
+		System.out.println("["+this.id+"] " + msg);
 	}
 	
 	@Override
@@ -52,18 +58,20 @@ public class Proceso implements Runnable {
 			
 			// Bucle Principal
 			// Espera
-			
+			escribirAConsola("Thread en Espera");
 			try {
-				Thread.sleep((long) randomNumber(0.5,1.0));
+				Thread.sleep((long) randomNumber(0.5,1.0) * 1000);
 			} catch(Exception ex) {
 				ex.printStackTrace();
 				return;
 			}
 			
 			// Computar Valor
-			
+			escribirAConsola("Computando valor.");
 			int valor = computarValor();
+			
 			if(valor < 0) {
+				escribirAConsola("Valora Computado Incorrecto");
 				eleccion();
 			}
 			
@@ -72,41 +80,70 @@ public class Proceso implements Runnable {
 	}
 	
 	public int computarValor() {
-		return 1;
+		
+		if(this.coordinador == this.id) return 1;
+		try {
+			String res = request(Controller.getController().getUrlForID(coordinador) + "computar?id=" + coordinador);
+			
+			return Integer.parseInt(res);
+		} catch(Exception ex) {
+			return -1;
+		}
+		
+		//return 1;
 	}
 	
 	public void eleccion() {
-		boolean flagFinEleccion = false;
-		while(!flagFinEleccion) {
-			boolean flagSuccess = false;
-			for(int i = id+1; i <= 6; i++) {
-				if(coordinadorActivo("http://localhost:8080/loquequieras"+i)) {
-					flagSuccess = true;
-					break;
-				}
-			}
-			if(flagSuccess) {
-				flagCoordinador = false;
-				try {
-					synchronized(espera) {
-						espera.wait(1000);
-					}
-					
-					if(flagCoordinador) {
-						flagFinEleccion = true;
-					}
-				} catch(Exception ex) {
-					
-				}
-			} else {
+		
+		if(estadoAcuerdo == Acuerdo.ACUERDO) {
+			
+			if(this.id == Controller.getController().getNumProc()-1) {
 				this.coordinador = id;
 				notificarCoordinador();
-				flagFinEleccion = true;
+				estadoAcuerdo = Acuerdo.ACUERDO;
+				return;
+			}
+			
+			estadoAcuerdo= Acuerdo.ELECCION_ACTIVA;
+			boolean flagFinEleccion = false;
+			while(!flagFinEleccion) {
+				boolean flagSuccess = false;
+				for(int i = id+1; i < 6; i++) {
+					if(coordinadorActivo(Controller.getController().getUrlForID(i)+"eleccion?id="+i)) {
+						flagSuccess = true;
+						break;
+					}
+				}
+				if(flagSuccess) {
+					
+					escribirAConsola("Entrando a eleccion Pasiva");
+					
+					estadoAcuerdo = Acuerdo.ELECCION_PASIVA;
+					flagCoordinador = false;
+					try {
+						synchronized(espera) {
+							espera.wait(1000);
+						}
+						
+						if(flagCoordinador) {
+							flagFinEleccion = true;
+							estadoAcuerdo = Acuerdo.ACUERDO;
+						}
+					} catch(Exception ex) {
+						
+					}
+				} else {
+					this.coordinador = id;
+					notificarCoordinador();
+					flagFinEleccion = true;
+					estadoAcuerdo = Acuerdo.ACUERDO;
+				}
 			}
 		}
 	} 
 	
 	public void notifyResponse(int idIn) {
+		escribirAConsola("Se me ha notificado " + idIn + " como nuevo controldor.");
 		flagCoordinador = true;
 		coordinador = idIn;
 		synchronized(espera) {
@@ -117,7 +154,10 @@ public class Proceso implements Runnable {
 	public void notificarCoordinador() {
 		for(int i = 0; i < Controller.instance.getNumProc(); i++) {
 			// Request a la url de notificación
-			request("");
+			
+			if(i == this.id) continue;
+			
+			request(Controller.getController().getUrlForID(i) + "notificarControlador?id=" + i + "&controlador=" + this.id);
 		}
 	}
 	
@@ -164,6 +204,7 @@ public class Proceso implements Runnable {
 	}
 
 	public int computar() {
+		escribirAConsola(" Recibida peticion de computar.");
 		if(estadoProceso == Estado.INACTIVO) {
 			return -1;
 		} else {
@@ -186,7 +227,7 @@ public class Proceso implements Runnable {
 	}
 	
 	public double randomNumber(double lowerLimit, double upperLimit) {
-		return lowerLimit + r.nextDouble(upperLimit-lowerLimit);
+		return lowerLimit + r.nextDouble(upperLimit-lowerLimit) +5;
 	}
 
 }
