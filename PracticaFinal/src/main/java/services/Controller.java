@@ -13,6 +13,7 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 
 import threads.Proceso;
+import util.Maquina;
 
 @Singleton
 @Path("controller")
@@ -21,40 +22,20 @@ public class Controller {
 	// Singleton Structure
 
 	public static Controller instance = null;
+	
+	
+	ArrayList<Thread> threads;
 	ArrayList<Proceso> procesos;
 
 	int numLocal = 2;
 	int idLocal = 0;
 	int numProcesos = 6;
 
+	ArrayList<Maquina> maquinas;
+	
+	
 	public Controller() {
 		Controller.instance = this;
-
-		try {
-			URL url = new URL("http://localhost:3000/");
-			HttpURLConnection con = (HttpURLConnection) url.openConnection();
-			con.setRequestMethod("GET");
-
-			BufferedReader br = new BufferedReader(new InputStreamReader(con.getInputStream()));
-			String output = "";
-			String tmp;
-			while ((tmp = br.readLine()) != null) {
-				output += tmp;
-			}
-
-			this.idLocal = Integer.parseInt(output);
-
-		} catch (Exception ex) {
-
-		}
-		System.out.println("[CONTROLLER] Started with id: " + this.idLocal);
-		procesos = new ArrayList<>();
-		for (int i = 0; i < numLocal; i++) {
-			Proceso tmp = new Proceso(i + idLocal);
-			procesos.add(tmp);
-			Thread tmpThread = new Thread(tmp);
-			tmpThread.start();
-		}
 	}
 
 	public static Controller getController() {
@@ -67,13 +48,14 @@ public class Controller {
 
 	public String getUrlForID(int id) {
 		
-		if(id > 3) {
-			return "http://localhost:8082/PracticaFinal/rest/controller/";
+		for(int i = 0; i < maquinas.size();i++) {
+			if(maquinas.get(i).idInMachine(id)) {
+				return "http://" + maquinas.get(i).getAddress() + "/PracticaFinal/rest/controller/";
+			}
 		}
-		if(id > 1) {
-			return "http://localhost:8081/PracticaFinal/rest/controller/";
-		}
-		return "http://localhost:8080/PracticaFinal/rest/controller/";
+		
+		return "none";
+	
 	}
 
 	// Endpoints
@@ -82,9 +64,46 @@ public class Controller {
 	@Produces(MediaType.TEXT_PLAIN)
 	@Path("start")
 	public String start() {
+		
+		System.out.println("[CONTROLLER] Started with id: " + this.idLocal);
+		procesos = new ArrayList<>();
+		threads = new ArrayList<>();
+		for (int i = 0; i < numLocal; i++) {
+			Proceso tmp = new Proceso(i + idLocal);
+			procesos.add(tmp);
+			Thread tmpThread = new Thread(tmp);
+			threads.add(tmpThread);
+		}
+		for(int i = 0; i < threads.size();i++) {
+			threads.get(i).start();
+		}
+		
 		return "Operacion Realizada";
 	}
 
+	@GET
+	@Produces(MediaType.TEXT_PLAIN)
+	@Path("setId")
+	public String setId(@QueryParam(value = "id") int id, @QueryParam(value = "cantidad") int cantidad, @QueryParam(value = "total") int total) {
+		
+		this.idLocal = id;
+		this.numLocal = cantidad;
+		this.numProcesos = total;
+		this.maquinas = new ArrayList<>();
+		return "Operacion Realizada";
+	}
+	
+	@GET
+	@Produces(MediaType.TEXT_PLAIN)
+	@Path("addMachine")
+	public String addMachine(@QueryParam(value="address") String address, @QueryParam(value = "id") int id, @QueryParam(value = "cantidad") int cantidad) {
+		
+		this.maquinas.add(new Maquina(address,id,cantidad));
+		
+		return "Operacion Realizada";
+	}
+	
+	
 	@GET
 	@Produces(MediaType.TEXT_PLAIN)
 	@Path("eleccion")
@@ -93,8 +112,8 @@ public class Controller {
 			return "Error";
 		int workingId = id - idLocal;
 		Proceso tmp = procesos.get(workingId);
-		tmp.eleccion();
-		return "";
+		int res = tmp.eleccion();
+		return Integer.toString(res);
 	}
 
 	@GET
@@ -118,4 +137,29 @@ public class Controller {
 		tmp.notifyResponse(controlador);
 		return "Operacion Realizada";
 	}
+	@GET
+	@Produces(MediaType.TEXT_PLAIN)
+	@Path("pararProceso")
+	public String pararProceso(@QueryParam(value = "id") int id) {
+		if (id - idLocal >= numLocal || id - idLocal < 0)
+			return "Error";
+		int workingId = id - idLocal;
+		Proceso tmp = procesos.get(workingId);
+		tmp.pararProcesso();
+		return "Operacion Realizada";
+	}
+	
+	@GET
+	@Produces(MediaType.TEXT_PLAIN)
+	@Path("iniciarProceso")
+	public String iniciarProceso(@QueryParam(value = "id") int id) {
+		if (id - idLocal >= numLocal || id - idLocal < 0)
+			return "Error";
+		int workingId = id - idLocal;
+		Proceso tmp = procesos.get(workingId);
+		System.out.println("Intentando iniciar xD");
+		tmp.iniciarProceso();
+		return "Operacion Realizada";
+	}
+	
 }
